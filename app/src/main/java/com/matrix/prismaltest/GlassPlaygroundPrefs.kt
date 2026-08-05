@@ -11,7 +11,8 @@ import kotlin.math.roundToInt
 import androidx.core.content.edit
 
 /**
- * Maps slider progress to [PrismalFrameLayout] values. Height slider uses 0–400; others 0–100.
+ * Maps slider progress to [PrismalFrameLayout] values.
+ * Refraction height / lens scale (height in dp, lens scale ~0.35–2).
  */
 object GlassPlaygroundMappings {
     const val HEIGHT_PROGRESS_MAX = 800
@@ -20,15 +21,23 @@ object GlassPlaygroundMappings {
     fun progressFromBlur(blur: Float) =
         (((blur - 0.45f) / 120f) * 100f).roundToInt().coerceIn(0, 100)
 
-    fun heightBlurFromProgress(p: Int) =
-        2f + (p.coerceIn(0, HEIGHT_PROGRESS_MAX) / HEIGHT_PROGRESS_MAX.toFloat()) * 148f
-    fun progressFromHeightBlur(h: Float) =
-        (((h - 2f) / 148f) * HEIGHT_PROGRESS_MAX).roundToInt()
+    /** Refraction band depth in dp */
+    fun heightBlurDpFromProgress(p: Int) =
+        4f + (p.coerceIn(0, HEIGHT_PROGRESS_MAX) / HEIGHT_PROGRESS_MAX.toFloat()) * 40f
+
+    fun progressFromHeightBlurDp(dp: Float) =
+        (((dp - 4f) / 40f) * HEIGHT_PROGRESS_MAX).roundToInt()
             .coerceIn(0, HEIGHT_PROGRESS_MAX)
 
-    fun lensScaleFromProgress(p: Int) = 0.2f + (p / 100f) * 9.8f
+    /** @deprecated name kept for call sites - value is dp, convert to px before applying. */
+    fun heightBlurFromProgress(p: Int) = heightBlurDpFromProgress(p)
+
+    fun progressFromHeightBlur(h: Float) = progressFromHeightBlurDp(h)
+
+    /** Multiplier on `refractionHeight × 2 × displacementScale` */
+    fun lensScaleFromProgress(p: Int) = 0.35f + (p / 100f) * 1.65f
     fun progressFromLensScale(s: Float) =
-        (((s - 0.2f) / 9.8f) * 100f).roundToInt().coerceIn(0, 100)
+        (((s - 0.35f) / 1.65f) * 100f).roundToInt().coerceIn(0, 100)
 
     fun chromaFromProgress(p: Int) = p * 0.55f
     fun progressFromChroma(c: Float) =
@@ -226,8 +235,7 @@ data class GlassParams(
 object GlassPlaygroundPrefs {
 
     private const val PREFS = "prismal_glass_playground"
-    private const val KEY_SAVED = "saved_v2"
-    private const val KEY_SAVED_LEGACY = "saved_v1"
+    private const val KEY_SAVED = "saved_v3"
 
     private const val K_SHOW_NORMALS = "show_normals"
 
@@ -278,9 +286,7 @@ object GlassPlaygroundPrefs {
 
     fun load(context: Context): GlassParams? {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val hasV2 = p.getBoolean(KEY_SAVED, false)
-        val hasLegacy = p.getBoolean(KEY_SAVED_LEGACY, false)
-        if (!hasV2 && !hasLegacy) return null
+        if (!p.getBoolean(KEY_SAVED, false)) return null
         val d = defaultParams()
         fun gf(key: String, fallback: Float) =
             if (p.contains(key)) p.getFloat(key, fallback) else fallback
@@ -321,15 +327,15 @@ object GlassPlaygroundPrefs {
         )
     }
 
-    /** Defaults aligned with [PrismalLiquidGlass] + typical playground positions. */
+    /** Defaults tuned for iOS style refraction on the 280 dp hero card. */
     fun defaultParams(): GlassParams = GlassParams.fromControls(
         pBlur = 40,
-        pHeight = 60,
-        pLens = 50,
+        pHeight = GlassPlaygroundMappings.progressFromHeightBlurDp(16f),
+        pLens = GlassPlaygroundMappings.progressFromLensScale(1.0f),
         pChroma = 40,
         pCorner = 45,
-        pDome = 78,
-        pFresnel = 52,
+        pDome = 40,
+        pFresnel = 21,
         pIor = GlassPlaygroundMappings.progressFromIor(1.55f),
         pThick = GlassPlaygroundMappings.progressFromThicknessDp(18f),
         pNormal = GlassPlaygroundMappings.progressFromNormalStrength(1.15f),
@@ -406,17 +412,23 @@ object GlassPlaygroundPrefs {
         }
     }
 
+    /** Applies saved playground tuning to card-sized [PrismalFrameLayout] surfaces only. */
     fun applyTo(context: Context, vararg frames: PrismalFrameLayout) {
         val params = load(context) ?: defaultParams()
         val dm = context.resources.displayMetrics
         val cornerPx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, params.cornerDp, dm)
         val insetPx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, params.refractionInsetDp, dm)
         val thickPx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, params.thicknessDp, dm)
+        val heightBlurPx = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            params.heightBlurFactor,
+            dm
+        )
         val shColor = Color.argb(params.shadowAlpha, 255, 255, 255)
         for (f in frames) {
             PrismalLiquidGlass.applyBase(f)
             f.setBlurRadius(params.blurRadius)
-            f.setHeightBlurFactor(params.heightBlurFactor)
+            f.setHeightBlurFactor(heightBlurPx)
             f.setLensRefractionScale(params.lensRefractionScale)
             f.setChromaticAberration(params.chromaticAberration)
             f.setCornerRadius(cornerPx)

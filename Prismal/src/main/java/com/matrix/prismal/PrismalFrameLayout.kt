@@ -308,17 +308,23 @@ open class PrismalFrameLayout @JvmOverloads constructor(
         invalidate()
     }
 
-    private fun pushPressInteraction(progress: Float, highlightX: Float, highlightY: Float) {
+    private fun pushPressInteraction(
+        progress: Float,
+        highlightX: Float,
+        highlightY: Float,
+        backdropPinch: Float = LiquidGlassInteraction.DEFAULT_BACKDROP_PINCH,
+        glowStrength: Float = 1f,
+    ) {
         val w = width.coerceAtLeast(1).toFloat()
         val h = height.coerceAtLeast(1).toFloat()
-        val pinch = if (progress > 0.001f) LiquidGlassInteraction.DEFAULT_BACKDROP_PINCH else 1f
-        val strength = if (progress > 0.001f) 1f else 0f
+        val pinch = if (progress > 0.001f) backdropPinch else 1f
+        val strength = if (progress > 0.001f) glowStrength else 0f
         glSurface.queueAndRender {
             renderer.setPressInteraction(
                 progress,
                 pinch,
                 (highlightX / w).coerceIn(0f, 1f),
-                (highlightY / h).coerceIn(0f, 1f),
+                (1f - highlightY / h).coerceIn(0f, 1f),
                 strength,
             )
         }
@@ -945,6 +951,8 @@ open class PrismalFrameLayout @JvmOverloads constructor(
         highlightX: Float = width / 2f,
         highlightY: Float = height / 2f,
         applyTransform: Boolean = true,
+        backdropPinch: Float = LiquidGlassInteraction.DEFAULT_BACKDROP_PINCH,
+        glowStrength: Float = 1f,
     ) {
         if (applyTransform && width > 0 && height > 0) {
             val transform = LiquidGlassInteraction.computeViewTransform(
@@ -968,7 +976,7 @@ open class PrismalFrameLayout @JvmOverloads constructor(
                 updateBackground()
             }
         }
-        pushPressInteraction(progress, highlightX, highlightY)
+        pushPressInteraction(progress, highlightX, highlightY, backdropPinch, glowStrength)
         if (progress > 0.001f) invalidate()
     }
 

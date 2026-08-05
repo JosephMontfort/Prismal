@@ -42,6 +42,7 @@ class GlassPlaygroundActivity : AppCompatActivity() {
 
         hero = findViewById(R.id.playgroundHeroGlass)
         PrismalLiquidGlass.applyBase(hero)
+        hero.setOnClickWithAnimationListener { }
 
         fun dp(v: Float): Float = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP, v, resources.displayMetrics
@@ -130,8 +131,8 @@ class GlassPlaygroundActivity : AppCompatActivity() {
         wireSeek(seekBlur, lblBlur, { "%.1f".format(M.blurFromProgress(it)) }) {
             hero.setBlurRadius(M.blurFromProgress(it))
         }
-        wireSeek(seekHeight, lblHeight, { "%.1f".format(M.heightBlurFromProgress(it)) }, max = M.HEIGHT_PROGRESS_MAX) {
-            hero.setHeightBlurFactor(M.heightBlurFromProgress(it))
+        wireSeek(seekHeight, lblHeight, { "%.1fdp".format(M.heightBlurDpFromProgress(it)) }, max = M.HEIGHT_PROGRESS_MAX) {
+            hero.setHeightBlurFactor(dp(M.heightBlurDpFromProgress(it)))
         }
         wireSeek(seekLens, lblLens, { "%.2f".format(M.lensScaleFromProgress(it)) }) {
             hero.setLensRefractionScale(M.lensScaleFromProgress(it))
@@ -249,6 +250,12 @@ class GlassPlaygroundActivity : AppCompatActivity() {
             }
             switchShowNormals.isChecked = saved.showNormals
             applyDownsampleModeToRadioGroup(saved.downsampleMode)
+        } ?: run {
+            val defaults = GlassPlaygroundPrefs.defaultParams()
+            val prog = GlassPlaygroundPrefs.seekProgressFromParams(defaults)
+            for (i in bars.indices) {
+                bars[i].setValue(prog[i].toFloat())
+            }
         }
 
         for (i in bars.indices) {
@@ -256,6 +263,7 @@ class GlassPlaygroundActivity : AppCompatActivity() {
         }
         switchShowNormals.isChecked.let { hero.setShowNormals(it) }
         hero.setCaptureDownsample(selectedDownsampleMode())
+        bars.forEach { it.recalibrateThumb() }
 
         hero.post { hero.updateBackground() }
         persistFromUi()

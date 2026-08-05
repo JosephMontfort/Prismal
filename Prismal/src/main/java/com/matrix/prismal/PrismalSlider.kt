@@ -14,8 +14,10 @@ import android.view.VelocityTracker
 import android.view.View
 import android.widget.FrameLayout
 import androidx.core.content.res.use
+import com.matrix.prismal.utils.LiquidGlassInteraction
 import com.matrix.prismal.utils.SpringAnimator
 import kotlin.math.abs
+import kotlin.math.min
 import androidx.core.graphics.toColorInt
 
 /**
@@ -57,19 +59,21 @@ class PrismalSlider @JvmOverloads constructor(
     private var maxValue = 100f
     private var currentValue = 0f
     private var onValueChanged: ((Float) -> Unit)? = null
-    private var restBlur = 3f
-    private var pressChromatic = 4.5f
+    private var restBlur = 8f
+    private var pressChromatic = 3f
     private var accentColor = "#0088FF".toColorInt()
-    private var thumbIOR = 1.3f
+    private var thumbIOR = 1.45f
     private var thumbBrightness = 1.12f
-    private var thumbNormalStrength = 0.2f
-    private var thumbDisplacementScale = 2.8f
+    private var thumbNormalStrength = 2.0f
+    private var thumbDisplacementScale = 1f
+    private var thumbRestLensScale = 0.38f
+    private var thumbPressLensScale = 0.72f
     private var thumbShadowColor = Color.argb(0, 0, 0, 0)
     private var thumbShadowSoftness = 0.25f
     private var thumbThicknessPx = -1f
     private var thumbHighlightWidth = -1f
     private var thumbHeightBlurFactor = -1f
-    private var thumbMinSmoothing = 10f
+    private var thumbMinSmoothing = 2.5f
     private var thumbCornerRadiusPx = -1f
     private var thumbRefractionInset = -1f
     private var thumbEdgeFalloff = -1f
@@ -155,14 +159,14 @@ class PrismalSlider @JvmOverloads constructor(
     private fun updateThumbBackdrop() = scheduleThumbBackdropCapture(force = true)
 
     private fun applyPressState(t: Float) {
-        val density = resources.displayMetrics.density
         val pressT = t.coerceIn(0f, 1f)
-        val restHBF = if (thumbHeightBlurFactor > 0f) thumbHeightBlurFactor * density else 8f * density
+        val restHbfPx = thumbRefractionHeightPx(0f)
+        val pressHbfPx = thumbRefractionHeightPx(1f)
 
-        thumb.setBlurRadius(lerp(restBlur, 0.8f, pressT))
+        thumb.setBlurRadius(lerp(restBlur, 0f, pressT))
         thumb.setChromaticAberration(lerp(0f, pressChromatic, pressT))
-        thumb.setLensRefractionScale(lerp(0.6f, 1.8f, pressT))
-        thumb.setHeightBlurFactor(lerp(restHBF, restHBF * 2.75f, pressT))
+        thumb.setLensRefractionScale(lerp(thumbRestLensScale, thumbPressLensScale, pressT))
+        thumb.setHeightBlurFactor(lerp(restHbfPx, pressHbfPx, pressT))
 
         overlay.alpha = if (isThumbInGlassState() && !thumbBackdropReady) {
             1f
@@ -174,10 +178,25 @@ class PrismalSlider @JvmOverloads constructor(
             highlightX = thumbW / 2f,
             highlightY = thumbH / 2f,
             applyTransform = false,
+            backdropPinch = lerp(1f, LiquidGlassInteraction.THUMB_BACKDROP_PINCH, pressT),
+            glowStrength = pressT * LiquidGlassInteraction.THUMB_GLOW_STRENGTH,
         )
         if (isThumbInGlassState() && !thumbBackdropReady && !thumbCaptureInFlight && !thumbCapturePending) {
             scheduleThumbBackdropCapture(force = true)
         }
+    }
+
+    /** Refraction band in px; scaled from thumb size. */
+    private fun thumbRefractionHeightPx(pressFraction: Float): Float {
+        val density = resources.displayMetrics.density
+        val minDimDp = min(thumbW, thumbH) / density
+        val fullDp = if (thumbHeightBlurFactor > 0f) {
+            thumbHeightBlurFactor
+        } else {
+            (minDimDp * 0.42f).coerceIn(4f, 12f)
+        }
+        val restDp = fullDp * 0.28f
+        return dp(lerp(restDp, fullDp, pressFraction.coerceIn(0f, 1f)))
     }
 
     private fun applySquish() {
@@ -310,36 +329,67 @@ class PrismalSlider @JvmOverloads constructor(
 
     private val thumbCaptureRunnable = Runnable { scheduleThumbBackdropCapture(force = true) }
 
-    private fun setupThumb() {
+    /** Re-applies thumb-only optical calibration. */
+    fun recalibrateThumb() {
+        setupThumb()
+        applyPressState(pressSpring.value.coerceIn(0f, 1f))
+    }
 
+    private fun setupThumb() {
         thumb.setBackdropHandledByChild(true)
         thumb.setOnBackdropCapturedListener {
             thumbCaptureInFlight = false
             thumbBackdropReady = true
             applyPressState(pressSpring.value)
         }
-        PrismalLiquidGlass.applyBase(thumb)
+        configureThumbGlass()
+    }
+
+    /** Small-capsule recipe — independent of [PrismalLiquidGlass] card defaults. */
+    private fun configureThumbGlass() {
+        val density = resources.displayMetrics.density
+        val minDim = min(thumbW, thumbH)
+        val minDimDp = minDim / density
+        val refractionHeightDp = if (thumbHeightBlurFactor > 0f) {
+            thumbHeightBlurFactor
+        } else {
+            (minDimDp * 0.42f).coerceIn(4f, 12f)
+        }
+        val thicknessPx = if (thumbThicknessPx > 0f) {
+            thumbThicknessPx
+        } else {
+            dp((minDimDp * 0.30f).coerceIn(4f, 9f))
+        }
+        val insetPx = if (thumbRefractionInset > 0f) {
+            thumbRefractionInset
+        } else {
+            (minDim * 0.06f).coerceIn(1.5f * density, 4f * density)
+        }
 
         thumb.setCornerRadius(if (thumbCornerRadiusPx > 0f) thumbCornerRadiusPx else thumbR)
         thumb.setIOR(thumbIOR)
-        thumb.setThickness(if (thumbThicknessPx > 0f) thumbThicknessPx else dp(1f))
+        thumb.setThickness(thicknessPx)
         thumb.setBlurRadius(restBlur)
         thumb.setBrightness(thumbBrightness)
         thumb.setGlassColor(thumbGlassColor)
-        thumb.setLensRefractionScale(19f)
+        thumb.setLensRefractionScale(thumbRestLensScale)
         thumb.setDisplacementScale(thumbDisplacementScale)
         thumb.setNormalStrength(thumbNormalStrength)
-        thumb.setLiquidDomeStrength(5.15f)
-        thumb.setFresnelReflectStrength(10f)
-        thumb.setRimStrength(0f)
-        thumb.setSpecular(.5f, 18f)
-        thumb.setCausticIntensity(0f)
+        thumb.setLiquidDomeStrength(1.15f)
+        thumb.setFresnelReflectStrength(2.0f)
+        thumb.setRimStrength(0.75f)
+        thumb.setSpecular(1.2f, 120f)
+        thumb.setCausticIntensity(0.12f)
         thumb.setMinSmoothing(thumbMinSmoothing)
-        thumb.setLightDirection(42f, 78f)
+        thumb.setHighlightWidth(if (thumbHighlightWidth > 0f) thumbHighlightWidth else 0.45f)
+        thumb.setLightDirection(-0.35f, -0.75f)
+        thumb.setHeightBlurFactor(dp(refractionHeightDp * 0.28f))
+        thumb.setRefractionInset(insetPx)
+        thumb.setEdgeRefractionFalloff(if (thumbEdgeFalloff > 0f) thumbEdgeFalloff else 2f)
+        thumb.setChromaticAberration(0f)
+        thumb.setDispersion(0.4f, 0.4f)
+        thumb.setTransmittance(1f)
         thumb.setShadowProperties(thumbShadowColor, thumbShadowSoftness)
-        if (thumbHighlightWidth > 0f) thumb.setHighlightWidth(thumbHighlightWidth)
-        if (thumbRefractionInset > 0f) thumb.setRefractionInset(thumbRefractionInset)
-        if (thumbEdgeFalloff > 0f) thumb.setEdgeRefractionFalloff(thumbEdgeFalloff)
         thumb.setShowNormals(thumbShowNormals)
         thumb.setParallaxScale(thumbParallaxScale)
     }

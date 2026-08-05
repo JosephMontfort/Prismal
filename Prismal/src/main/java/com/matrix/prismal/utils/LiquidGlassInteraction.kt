@@ -17,6 +17,12 @@ internal object LiquidGlassInteraction {
     /** Center backdrop scale on full press - content under the dome shrinks to 75 %. */
     const val DEFAULT_BACKDROP_PINCH = 0.75f
 
+    /** Softer pinch for small switch/slider thumbs. */
+    const val THUMB_BACKDROP_PINCH = 0.88f
+
+    /** Subtle touch glow on small thumbs. */
+    const val THUMB_GLOW_STRENGTH = 0.32f
+
     private const val DRAG_TANH_DERIVATIVE = 0.05f
 
     data class ViewTransform(

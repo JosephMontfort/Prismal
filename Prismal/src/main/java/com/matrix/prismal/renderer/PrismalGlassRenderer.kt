@@ -379,7 +379,7 @@ internal class PrismalGlassRenderer(private val context: Context) : GLSurfaceVie
             kotlin.math.min(1f, max(0f, normalStrength * 0.9f))
         )
         GLES20.glUniform1f(uVibrancy, 1.28f)
-        GLES20.glUniform1f(uPlainHighlight, 0.22f)
+        GLES20.glUniform1f(uPlainHighlight, 0.16f)
         GLES20.glUniform1f(uLiquidDome, liquidDome)
         GLES20.glUniform1f(uFresnelReflect, fresnelReflect)
 
@@ -732,8 +732,8 @@ internal class PrismalGlassRenderer(private val context: Context) : GLSurfaceVie
      * Press interaction state for iOS-style liquid glass.
      * @param progress 0 = rest, 1 = fully pressed
      * @param pinch Center backdrop scale at full press
-     * @param glowX Touch highlight X in normalized glass coords [0, 1]
-     * @param glowY Touch highlight Y in normalized glass coords [0, 1]
+     * @param glowX Touch highlight X in normalized view coords [0, 1] (left to right)
+     * @param glowY Touch highlight Y in normalized view coords [0, 1] (top to bottom; flipped to GL shape space internally)
      */
     fun setPressInteraction(
         progress: Float,
