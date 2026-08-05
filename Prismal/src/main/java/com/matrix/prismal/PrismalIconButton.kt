@@ -224,7 +224,7 @@ class PrismalIconButton @JvmOverloads constructor(
         val density = resources.displayMetrics.density
         val sideDp = sidePx / density
         prismalSurface.setThickness((sideDp * 0.20f).coerceIn(6f, 18f) * density)
-        prismalSurface.setHeightBlurFactor((sideDp * 0.32f).coerceIn(12f, 30f) * density)
+        prismalSurface.setHeightBlurFactor((sideDp * 0.32f).coerceIn(12f, 36f) * density)
         prismalSurface.setRefractionInset((sidePx * 0.04f).coerceIn(2f * density, 5f * density))
     }
 

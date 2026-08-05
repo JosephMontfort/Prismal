@@ -357,13 +357,10 @@ internal class PrismalGlassRenderer(private val context: Context) : GLSurfaceVie
         GLES20.glUniform4f(uGlassColor, glassColor[0], glassColor[1], glassColor[2], glassColor[3])
 
         val minGlassDim = minOf(glassWidth, glassHeight)
-        val dimNorm = kotlin.math.sqrt((minGlassDim / 118f).coerceIn(0.3f, 1f))
-        val lensPx = (minGlassDim * 0.058f * displacementScale + glassThickness * displacementScale * 1.75f + (ior - 1f) * 20f) * lensRefractionUserScale * dimNorm
-
-        val bigGlassT = ((minGlassDim - 88f) / (228f - 88f)).coerceIn(0f, 1f)
-        val bigGlassK = bigGlassT * bigGlassT * (3f - 2f * bigGlassT)
-        val lensCapFrac = 0.65f + 0.10f * bigGlassK
-        GLES20.glUniform1f(uLensRefractionPx, lensPx.coerceIn(3.2f, minGlassDim * lensCapFrac))
+        val domeBoost = 1f + 0.55f * liquidDome.coerceIn(0f, 2f)
+        val refractionHeight = heightBlurFactor * domeBoost
+        val lensPx = refractionHeight * 2f * displacementScale * lensRefractionUserScale
+        GLES20.glUniform1f(uLensRefractionPx, lensPx.coerceIn(4f, minGlassDim * 0.85f))
         GLES20.glUniform1f(
             uLensDepthEffect,
             kotlin.math.min(1f, max(0f, normalStrength * 0.9f))
@@ -607,8 +604,8 @@ internal class PrismalGlassRenderer(private val context: Context) : GLSurfaceVie
     }
 
     /**
-     * Controls the depth-of-field blur gradient in pixels (`u_heightTransitionWidth` in the shader).
-     * Proportional to view size - set to roughly 25 % of the view's minimum dimension.
+     * Lens refraction band depth in pixels (`u_heightTransitionWidth` in the shader).
+     * Displacement is set to ~2× this value (see `refractionAmount` in Backdrop).
      */
     fun setHeightBlurFactor(v: Float) {
         heightBlurFactor = v

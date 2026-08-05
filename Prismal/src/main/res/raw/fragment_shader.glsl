@@ -169,9 +169,11 @@ void main() {
     if (opacity < 0.001) discard;
 
     float dome = clamp(u_liquidDome, 0.0, 2.0);
-    float tw = max(u_heightTransitionWidth * (1.0 + 0.38 * dome) + minDim * 0.085, 1.0);
+    float refractionHeight = max(u_heightTransitionWidth * (1.0 + 0.55 * dome), 1.0);
+    refractionHeight = min(refractionHeight, minDim * 0.98);
 
-    tw = min(tw, minDim * 0.88);
+    float tw = max(u_heightTransitionWidth * (1.0 + 0.38 * dome), 1.0);
+    tw = min(tw, minDim * 0.98);
     float hSig = getHeightFromDist(distMask, tw);
     vec2 gradHSig = computeGradientHeight(pPx, halfSz, crMask, u_sminSmoothing, tw);
 
@@ -179,8 +181,8 @@ void main() {
     vec2 gradLens = gradSdRoundedRectRealistic(cKy, halfSz, gradRadius);
 
     float innerReach = max(min(halfSz.x, halfSz.y) - crMask * 0.42, minDim * 0.22);
-    innerReach += u_heightTransitionWidth * (1.0 + 0.3 * dome);
-    innerReach = min(innerReach, max(halfSz.x, halfSz.y) * 0.82 + minDim * 0.1);
+    innerReach += refractionHeight * (1.0 + 0.25 * dome);
+    innerReach = min(innerReach, max(halfSz.x, halfSz.y) * 0.95);
     float tDeep = clamp(edgeDist / max(innerReach, 2.0), 0.0, 1.0);
     float tShell = 1.0 - tDeep;
 
@@ -211,8 +213,7 @@ void main() {
     float menBlend = smoothstep(tw * 0.5, 0.0, edgeDist) * smoothstep(-6.0, 0.0, distMask) * 0.82;
     N = normalize(mix(N, N_meniscus, menBlend));
 
-    float dropBand = clamp(minDim * 0.19, 4.5, 44.0);
-    float dropLens = pow(smoothstep(dropBand, 0.0, edgeDist), 0.82);
+    float dropLens = pow(smoothstep(refractionHeight, 0.0, edgeDist), 0.82);
 
     if (u_showNormals == 1) {
         gl_FragColor = vec4(N * 0.5 + 0.5, opacity);
@@ -237,7 +238,7 @@ void main() {
     float ldLen = length(lensDir);
     lensDir = ldLen > 1e-5 ? lensDir / ldLen : vec2(0.0);
 
-    float lensRh = min(max(u_heightTransitionWidth, 1.0) * (1.0 + 0.55 * dome) + minDim * 0.11, minDim * 0.92);
+    float lensRh = refractionHeight;
     float sdIn = min(sdKy, 0.0);
     float dLens = 0.0;
     if ((-sdKy) < lensRh) {
@@ -249,7 +250,6 @@ void main() {
     vec2 parallax = (gradLens * height * (7.0 + 22.0 * F)) / u_resolution * parallaxK * u_parallaxScale;
     lensDeltaUv += parallax;
     lensDeltaUv *= mix(0.78, 1.12, (1.0 - F) * (0.42 + 0.58 * height));
-    lensDeltaUv *= dropLens;
 
     float refrStr = height * (0.5 + F * 0.35);
     vec3 refIn = refract(-V, N, 1.0 / u_ior);
@@ -262,7 +262,6 @@ void main() {
     bulge = pow(max(bulge, 0.0), 0.62) * height * (0.014 + 0.01 * dome);
     bulge *= smoothstep(0.02, 0.36, tDeep) * dropLens;
     vec2 bulgeUv = bDir * bulge * u_glassSize / u_resolution;
-    lensDeltaUv *= pxNorm;
     snellOff *= pxNorm * dropLens;
     bulgeUv *= pxNorm;
 
