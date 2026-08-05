@@ -126,6 +126,12 @@ class PrismalSwitch @JvmOverloads constructor(
         thumb.setLensRefractionScale(lerp(0.5f, 1.2f, t))
         thumb.setHeightBlurFactor(lerp(restHBF, restHBF * 3f, t))
         overlay.alpha = lerp(1f, 0f, t)
+        thumb.setPressInteraction(
+            progress = t,
+            highlightX = thumbW / 2f,
+            highlightY = thumbH / 2f,
+            applyTransform = false,
+        )
     }
 
     private fun applySquish() {
@@ -481,7 +487,7 @@ class PrismalSwitch @JvmOverloads constructor(
     /**
      * Sets the glass tint color of the thumb.
      *
-     * @param color ARGB color — alpha controls tint strength (0 = clear, 255 = fully tinted).
+     * @param color ARGB color - alpha controls tint strength (0 = clear, 255 = fully tinted).
      */
     fun setThumbColor(color: Int) {
         thumbGlassColor = color

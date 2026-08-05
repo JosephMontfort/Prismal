@@ -41,7 +41,7 @@ import com.matrix.prismal.PrismalFrameLayout
  * @param ior Index of refraction for the glass material (default 1.42).
  * @param blurRadius Gaussian blur radius in shader units (default 2).
  * @param cornerRadius Corner rounding radius (default 28 dp).
- * @param thickness SDF edge-ramp width — keep below ~40 % of min(w,h)/2 (default 18 dp).
+ * @param thickness SDF edge-ramp width - keep below ~40 % of min(w,h)/2 (default 18 dp).
  * @param normalStrength Surface normal map intensity (default 3.65).
  * @param displacementScale Background warp multiplier (default 1.0).
  * @param brightness Overall brightness multiplier (default 1.21).
@@ -49,7 +49,7 @@ import com.matrix.prismal.PrismalFrameLayout
  * @param rimStrength Fresnel rim-glow strength (default 0.18).
  * @param glassColor Additive tint colour (alpha controls strength; default transparent).
  * @param onClick When non-null, enables a spring press-scale and radial glow on tap.
- * @param update Called after every parameter update — use to invoke any advanced setters.
+ * @param update Called after every parameter update - use to invoke any advanced setters.
  * @param content Compose content drawn on top of the glass surface.
  */
 @Composable

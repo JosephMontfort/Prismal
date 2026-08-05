@@ -10,12 +10,12 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.ViewGroup
-import kotlin.math.hypot
 import android.widget.FrameLayout
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.toColorInt
 import com.matrix.prismal.filters.PrismalFilter
 import com.matrix.prismal.renderer.PrismalGlassRenderer
+import com.matrix.prismal.utils.LiquidGlassInteraction
 import com.matrix.prismal.utils.SpringAnimator
 import androidx.core.graphics.withClip
 
@@ -95,7 +95,17 @@ open class PrismalFrameLayout @JvmOverloads constructor(
 
     private var clickWithAnimListener: (() -> Unit)? = null
     private var clickAnimPressScale = 0.96f
-    private val clickAnimSpring = SpringAnimator(0.55f, 380f)
+    private var expandOnPress = true
+    private var clickAnimExpandDp = LiquidGlassInteraction.DEFAULT_PRESS_EXPAND_DP
+    private val pressSpring = SpringAnimator(0.5f, 300f)
+    private val dragSpringX = SpringAnimator(0.5f, 300f)
+    private val dragSpringY = SpringAnimator(0.5f, 300f)
+    private var interactiveEffects = false
+    private var dragging = false
+    private var touchOriginX = 0f
+    private var touchOriginY = 0f
+    private var dragOffsetX = 0f
+    private var dragOffsetY = 0f
 
     private var glowX = 0f
     private var glowY = 0f
@@ -250,14 +260,68 @@ open class PrismalFrameLayout @JvmOverloads constructor(
         viewTreeObserver.addOnGlobalLayoutListener(layoutListener)
         viewTreeObserver.addOnScrollChangedListener(scrollListener)
 
-        clickAnimSpring.onUpdate = { t ->
-            val s = 1f + (clickAnimPressScale - 1f) * t.coerceIn(0f, 1f)
-            pivotX = width / 2f
-            pivotY = height / 2f
-            scaleX = s
-            scaleY = s
+        bindInteractionSprings()
+    }
+
+    private fun bindInteractionSprings() {
+        val onFrame = {
+            applyInteractionVisuals()
         }
-        clickAnimSpring.snapTo(0f)
+        pressSpring.onUpdate = { onFrame() }
+        dragSpringX.onUpdate = { if (!dragging) onFrame() }
+        dragSpringY.onUpdate = { if (!dragging) onFrame() }
+        pressSpring.snapTo(0f)
+        dragSpringX.snapTo(0f)
+        dragSpringY.snapTo(0f)
+    }
+
+    private fun applyInteractionVisuals() {
+        if (width <= 0 || height <= 0) return
+        val progress = pressSpring.value.coerceIn(0f, 1f)
+        val dragX = if (dragging) dragOffsetX else dragSpringX.value
+        val dragY = if (dragging) dragOffsetY else dragSpringY.value
+        val transform = LiquidGlassInteraction.computeViewTransform(
+            width = width,
+            height = height,
+            density = resources.displayMetrics.density,
+            pressProgress = progress,
+            dragOffsetX = dragX,
+            dragOffsetY = dragY,
+            expandDp = clickAnimExpandDp,
+            expandOnPress = expandOnPress,
+            legacyPressScale = clickAnimPressScale,
+        )
+        pivotX = width / 2f
+        pivotY = height / 2f
+        scaleX = transform.scaleX
+        scaleY = transform.scaleY
+        translationX = transform.translationX
+        translationY = transform.translationY
+
+        val highlightX = if (interactiveEffects) touchOriginX + dragX else glowX
+        val highlightY = if (interactiveEffects) touchOriginY + dragY else glowY
+        pushPressInteraction(progress, highlightX, highlightY)
+
+        if (progress > 0.02f || transform.scaleX > 1.02f || transform.scaleY > 1.02f) {
+            updateBackground()
+        }
+        invalidate()
+    }
+
+    private fun pushPressInteraction(progress: Float, highlightX: Float, highlightY: Float) {
+        val w = width.coerceAtLeast(1).toFloat()
+        val h = height.coerceAtLeast(1).toFloat()
+        val pinch = if (progress > 0.001f) LiquidGlassInteraction.DEFAULT_BACKDROP_PINCH else 1f
+        val strength = if (progress > 0.001f) 1f else 0f
+        glSurface.queueAndRender {
+            renderer.setPressInteraction(
+                progress,
+                pinch,
+                (highlightX / w).coerceIn(0f, 1f),
+                (highlightY / h).coerceIn(0f, 1f),
+                strength,
+            )
+        }
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -270,19 +334,28 @@ open class PrismalFrameLayout @JvmOverloads constructor(
     override fun dispatchDraw(canvas: Canvas) {
         canvas.withClip(clipPath) {
             super.dispatchDraw(canvas)
-            if (hasClickCallback && glowAlpha > 0f) {
-                val maxR = hypot(width.toFloat(), height.toFloat())
+            val progress = when {
+                interactiveEffects -> pressSpring.value.coerceIn(0f, 1f)
+                else -> glowAlpha
+            }
+            if (hasClickCallback && progress > 0.001f) {
+                glowPaint.shader = null
+                glowPaint.color = Color.argb((progress * 20f).toInt().coerceIn(0, 255), 255, 255, 255)
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), glowPaint)
+
+                val cx = if (interactiveEffects) touchOriginX + if (dragging) dragOffsetX else dragSpringX.value else glowX
+                val cy = if (interactiveEffects) touchOriginY + if (dragging) dragOffsetY else dragSpringY.value else glowY
+                val glowR = minOf(width, height) * 1.5f
                 glowPaint.shader = RadialGradient(
-                    glowX, glowY, maxR,
+                    cx, cy, glowR,
                     intArrayOf(
-                        Color.argb((glowAlpha * 100).toInt(), 255, 255, 255),
-                        Color.argb((glowAlpha * 45).toInt(), 255, 255, 255),
+                        Color.argb((progress * 38f).toInt().coerceIn(0, 255), 255, 255, 255),
                         Color.TRANSPARENT
                     ),
-                    floatArrayOf(0f, 0.38f, 1f),
+                    floatArrayOf(0f, 1f),
                     Shader.TileMode.CLAMP
                 )
-                canvas.drawCircle(glowX, glowY, maxR, glowPaint)
+                canvas.drawCircle(cx, cy, glowR, glowPaint)
             }
         }
     }
@@ -298,7 +371,9 @@ open class PrismalFrameLayout @JvmOverloads constructor(
         viewTreeObserver.removeOnGlobalLayoutListener(layoutListener)
         viewTreeObserver.removeOnScrollChangedListener(scrollListener)
         Choreographer.getInstance().removeFrameCallback(glowCallback)
-        clickAnimSpring.cancel()
+        pressSpring.cancel()
+        dragSpringX.cancel()
+        dragSpringY.cancel()
     }
 
     override fun setOnClickListener(l: OnClickListener?) {
@@ -309,11 +384,12 @@ open class PrismalFrameLayout @JvmOverloads constructor(
 
     /**
      * Sets a click listener with a spring press-scale animation and radial glow.
-     * Independent of [setOnClickListener] — use this on glass cards; child components
+     * Independent of [setOnClickListener] - use this on glass cards; child components
      * (e.g. [PrismalSwitch]) can keep their own touch handling without conflict.
      */
     fun setOnClickWithAnimationListener(l: (() -> Unit)?) {
         clickWithAnimListener = l
+        interactiveEffects = l != null
         updateClickableState()
     }
 
@@ -323,10 +399,21 @@ open class PrismalFrameLayout @JvmOverloads constructor(
     }
 
     /**
-     * Target scale while pressed (default `0.96`). `1.0` disables the shrink effect.
+     * Target scale while pressed when [setExpandOnPress] is `false` (legacy shrink mode).
+     * Default `0.96`. Ignored when expand-on-press is enabled.
      */
     fun setClickAnimationPressScale(scale: Float) {
         clickAnimPressScale = scale.coerceIn(0.5f, 1f)
+    }
+
+    /** When `true` (default), the glass expands on press */
+    fun setExpandOnPress(expand: Boolean) {
+        expandOnPress = expand
+    }
+
+    /** Extra dp added to height on full press */
+    fun setClickAnimationExpandDp(dp: Float) {
+        clickAnimExpandDp = dp.coerceAtLeast(0f)
     }
 
     private fun updateClickableState() {
@@ -359,22 +446,7 @@ open class PrismalFrameLayout @JvmOverloads constructor(
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (clickWithAnimListener != null) {
-            pulseGlow(event)
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    clickAnimSpring.animateTo(1f)
-                    parent?.requestDisallowInterceptTouchEvent(true)
-                }
-
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    clickAnimSpring.animateTo(0f)
-                    parent?.requestDisallowInterceptTouchEvent(false)
-                    if (event.actionMasked == MotionEvent.ACTION_UP) {
-                        clickWithAnimListener?.invoke()
-                        performClick()
-                    }
-                }
-            }
+            handleInteractiveTouch(event)
             return true
         }
 
@@ -382,6 +454,40 @@ open class PrismalFrameLayout @JvmOverloads constructor(
             pulseGlow(event)
         }
         return super.onTouchEvent(event)
+    }
+
+    private fun handleInteractiveTouch(event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                dragging = true
+                touchOriginX = event.x
+                touchOriginY = event.y
+                dragOffsetX = 0f
+                dragOffsetY = 0f
+                dragSpringX.snapTo(0f)
+                dragSpringY.snapTo(0f)
+                pressSpring.animateTo(1f)
+                parent?.requestDisallowInterceptTouchEvent(true)
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                dragOffsetX = event.x - touchOriginX
+                dragOffsetY = event.y - touchOriginY
+                applyInteractionVisuals()
+            }
+
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                dragging = false
+                pressSpring.animateTo(0f)
+                dragSpringX.animateTo(0f)
+                dragSpringY.animateTo(0f)
+                parent?.requestDisallowInterceptTouchEvent(false)
+                if (event.actionMasked == MotionEvent.ACTION_UP) {
+                    clickWithAnimListener?.invoke()
+                    performClick()
+                }
+            }
+        }
     }
 
     internal fun setGlowEnabled(enabled: Boolean) {
@@ -823,6 +929,64 @@ open class PrismalFrameLayout @JvmOverloads constructor(
 
     fun setParallaxScale(value: Float) =
         glSurface.queueAndRender { renderer.setParallaxScale(value) }
+
+    /**
+     * Drives press interaction for custom components (switch thumb, icon button, etc.)
+     * @param progress Press amount 0–1
+     * @param dragOffsetX Finger drag from touch origin in px
+     * @param dragOffsetY Finger drag from touch origin in px
+     * @param highlightX Glow center X in view coords
+     * @param highlightY Glow center Y in view coords
+     */
+    fun setPressInteraction(
+        progress: Float,
+        dragOffsetX: Float = 0f,
+        dragOffsetY: Float = 0f,
+        highlightX: Float = width / 2f,
+        highlightY: Float = height / 2f,
+        applyTransform: Boolean = true,
+    ) {
+        if (applyTransform && width > 0 && height > 0) {
+            val transform = LiquidGlassInteraction.computeViewTransform(
+                width = width,
+                height = height,
+                density = resources.displayMetrics.density,
+                pressProgress = progress,
+                dragOffsetX = dragOffsetX,
+                dragOffsetY = dragOffsetY,
+                expandDp = clickAnimExpandDp,
+                expandOnPress = expandOnPress,
+                legacyPressScale = clickAnimPressScale,
+            )
+            pivotX = width / 2f
+            pivotY = height / 2f
+            scaleX = transform.scaleX
+            scaleY = transform.scaleY
+            translationX = transform.translationX
+            translationY = transform.translationY
+            if (progress > 0.02f || transform.scaleX > 1.02f) {
+                updateBackground()
+            }
+        }
+        pushPressInteraction(progress, highlightX, highlightY)
+        if (progress > 0.001f) invalidate()
+    }
+
+    fun clearPressInteraction() {
+        pressSpring.snapTo(0f)
+        dragSpringX.snapTo(0f)
+        dragSpringY.snapTo(0f)
+        dragging = false
+        dragOffsetX = 0f
+        dragOffsetY = 0f
+        scaleX = 1f
+        scaleY = 1f
+        translationX = 0f
+        translationY = 0f
+        glSurface.queueAndRender { renderer.clearPressInteraction() }
+        updateBackground()
+        invalidate()
+    }
 
     override fun onTouch(v: View?, event: MotionEvent): Boolean {
         if (!debug) return false

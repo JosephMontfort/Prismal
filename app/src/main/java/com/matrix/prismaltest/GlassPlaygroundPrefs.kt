@@ -14,7 +14,6 @@ import androidx.core.content.edit
  * Maps slider progress to [PrismalFrameLayout] values. Height slider uses 0–400; others 0–100.
  */
 object GlassPlaygroundMappings {
-
     const val HEIGHT_PROGRESS_MAX = 800
 
     fun blurFromProgress(p: Int) = 0.45f + (p / 100f) * 120f

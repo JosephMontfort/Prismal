@@ -13,6 +13,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.graphics.toColorInt
+import com.matrix.prismal.utils.LiquidGlassInteraction
 import com.matrix.prismal.utils.SpringAnimator
 
 /**
@@ -25,9 +26,9 @@ import com.matrix.prismal.utils.SpringAnimator
  *
  * ## Press animation
  * Two [SpringAnimator] instances replace the previous `ValueAnimator`:
- * - **scaleSpring** (`ζ = 0.7`, `k = 500`) — slightly underdamped so the surface briefly overshoots
+ * - **scaleSpring** (`ζ = 0.7`, `k = 500`) - slightly underdamped so the surface briefly overshoots
  *   1.0 on release, giving the characteristic iOS spring-back click feel.
- * - **pressSpring** (`ζ = 1.0`, `k = 1200`) — critically damped, tracks the finger instantly with
+ * - **pressSpring** (`ζ = 1.0`, `k = 1200`) - critically damped, tracks the finger instantly with
  *   no oscillation. Drives blur (rest → 0), chromatic aberration (0 → 3.5 px), and lens
  *   distortion (0.55 → 1.3) so the glass "activates" on press.
  *
@@ -45,14 +46,18 @@ class PrismalIconButton @JvmOverloads constructor(
 ) : FrameLayout(context, attrs) {
     private val prismalSurface = PrismalFrameLayout(context)
     private val iconView = AppCompatImageView(context)
-    private var pressScale = 0.82f
-    private var restBlur = 2f
-    private var restLensScale = 0.85f
+    private var pressExpandDp = LiquidGlassInteraction.DEFAULT_PRESS_EXPAND_DP
     private var clickListener: (() -> Unit)? = null
     private var defaultSizePx = 0
     private var lastGlassSizePx = 0
-    private val scaleSpring = SpringAnimator(0.4f, 500f)
-    private val pressSpring = SpringAnimator(1.0f, 1200f)
+    private var touchOriginX = 0f
+    private var touchOriginY = 0f
+    private var dragOffsetX = 0f
+    private var dragOffsetY = 0f
+    private val pressSpring = SpringAnimator(0.5f, 300f)
+
+    private var restBlur = 2f
+    private var restLensScale = 0.85f
 
     private fun dp(value: Float) = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, value, resources.displayMetrics
@@ -64,27 +69,36 @@ class PrismalIconButton @JvmOverloads constructor(
         prismalSurface.setBlurRadius(lerp(restBlur, 0f, t))
         prismalSurface.setChromaticAberration(lerp(0f, 3.5f, t))
         prismalSurface.setLensRefractionScale(lerp(restLensScale, restLensScale + 0.65f, t))
-    }
-
-    private fun applyScale(t: Float) {
-        val s = (1f + (pressScale - 1f) * t).coerceIn(0.1f, 2f)
-        prismalSurface.scaleX = s
-        prismalSurface.scaleY = s
+        prismalSurface.setPressInteraction(
+            progress = t,
+            dragOffsetX = dragOffsetX,
+            dragOffsetY = dragOffsetY,
+            highlightX = touchOriginX + dragOffsetX,
+            highlightY = touchOriginY + dragOffsetY,
+        )
     }
 
     private val touchListener = OnTouchListener { _, event ->
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                touchOriginX = event.x
+                touchOriginY = event.y
+                dragOffsetX = 0f
+                dragOffsetY = 0f
                 pressSpring.animateTo(1f)
-                scaleSpring.animateTo(1f)
-                prismalSurface.showGlow(event.x, event.y)
                 parent?.requestDisallowInterceptTouchEvent(true)
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                dragOffsetX = event.x - touchOriginX
+                dragOffsetY = event.y - touchOriginY
+                applyPressState(pressSpring.value)
             }
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 pressSpring.animateTo(0f)
-                scaleSpring.animateTo(0f)
-                prismalSurface.hideGlow()
+                dragOffsetX = 0f
+                dragOffsetY = 0f
                 if (event.actionMasked == MotionEvent.ACTION_UP) {
                     clickListener?.invoke()
                     performClick()
@@ -130,7 +144,8 @@ class PrismalIconButton @JvmOverloads constructor(
                 val iconPadding = getDimension(R.styleable.PrismalIconButton_pib_iconPadding, dp(8f)).toInt()
                 val iconRes = getResourceId(R.styleable.PrismalIconButton_pib_iconSrc, 0)
                 val iconTint = getColor(R.styleable.PrismalIconButton_pib_iconTint, Color.BLACK)
-                pressScale = getFloat(R.styleable.PrismalIconButton_pib_pressScale, 0.82f)
+                pressExpandDp = getFloat(R.styleable.PrismalIconButton_pib_pressScale, pressExpandDp)
+                    .let { if (it < 1f) LiquidGlassInteraction.DEFAULT_PRESS_EXPAND_DP else it }
 
                 addView(
                     prismalSurface,
@@ -158,11 +173,9 @@ class PrismalIconButton @JvmOverloads constructor(
         }
 
         pressSpring.onUpdate = { applyPressState(it) }
-        scaleSpring.onUpdate = { applyScale(it) }
         pressSpring.snapTo(0f)
-        scaleSpring.snapTo(0f)
         applyPressState(0f)
-        applyScale(0f)
+        prismalSurface.setClickAnimationExpandDp(pressExpandDp)
 
         prismalSurface.setOnTouchListener(touchListener)
     }
@@ -215,7 +228,7 @@ class PrismalIconButton @JvmOverloads constructor(
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         pressSpring.cancel()
-        scaleSpring.cancel()
+        prismalSurface.clearPressInteraction()
     }
 
     private fun applySizeScaledGlass(sidePx: Int) {

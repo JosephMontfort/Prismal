@@ -7,7 +7,7 @@ import androidx.core.graphics.toColorInt
  * Liquid Glass material for [PrismalFrameLayout]
  *
  * Applies the fixed optical recipe (IOR, thickness, normals, lighting, frost tint, etc.).
- * Tunable parameters — blur, refraction band, lens scale, chroma, corner radius, dome, Fresnel
+ * Tunable parameters - blur, refraction band, lens scale, chroma, corner radius, dome, Fresnel
  *
  * @author Saurav Sajeev
  */

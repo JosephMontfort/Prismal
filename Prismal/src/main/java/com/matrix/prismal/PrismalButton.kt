@@ -251,7 +251,7 @@ class PrismalButton @JvmOverloads constructor(
     /**
      * Sets the glass tint color of the button surface.
      *
-     * @param color ARGB color — alpha controls tint strength (0 = clear, 255 = fully tinted).
+     * @param color ARGB color - alpha controls tint strength (0 = clear, 255 = fully tinted).
      */
     fun setGlassColor(color: Int) {
         glassColor = color

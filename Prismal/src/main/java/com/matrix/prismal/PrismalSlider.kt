@@ -169,6 +169,12 @@ class PrismalSlider @JvmOverloads constructor(
         } else {
             lerp(1f, 0f, pressT)
         }
+        thumb.setPressInteraction(
+            progress = pressT,
+            highlightX = thumbW / 2f,
+            highlightY = thumbH / 2f,
+            applyTransform = false,
+        )
         if (isThumbInGlassState() && !thumbBackdropReady && !thumbCaptureInFlight && !thumbCapturePending) {
             scheduleThumbBackdropCapture(force = true)
         }
@@ -516,7 +522,7 @@ class PrismalSlider @JvmOverloads constructor(
     /**
      * Sets the glass tint color of the thumb.
      *
-     * @param color ARGB color — alpha controls tint strength (0 = clear, 255 = fully tinted).
+     * @param color ARGB color - alpha controls tint strength (0 = clear, 255 = fully tinted).
      */
     fun setThumbColor(color: Int) {
         thumbGlassColor = color

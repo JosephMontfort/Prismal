@@ -55,6 +55,11 @@ uniform float u_transmittance;
 uniform vec2  u_backdropSampleScale;
 uniform float u_parallaxScale;
 
+uniform float u_pressProgress;
+uniform float u_backdropPinch;
+uniform vec2  u_glowCenter;
+uniform float u_glowStrength;
+
 uniform int   u_showNormals;
 
 varying vec2 v_screenTexCoord;
@@ -139,8 +144,10 @@ vec3 applyVibrancy(vec3 rgb, float sat) {
     return clamp(mix(vec3(L), rgb, sat), 0.0, 1.0);
 }
 
-vec2 backdropUv(vec2 screenUv, vec2 offset) {
-    vec2 s = max(u_backdropSampleScale, vec2(0.01));
+vec2 backdropUv(vec2 screenUv, vec2 offset, float pinchMix) {
+    float press = clamp(u_pressProgress, 0.0, 1.0);
+    float pinch = mix(1.0, max(u_backdropPinch, 0.01), press * pinchMix);
+    vec2 s = max(u_backdropSampleScale, vec2(0.01)) / vec2(pinch);
     vec2 scaled = (screenUv - 0.5) / s + 0.5;
     return clamp(scaled + offset, vec2(0.0), vec2(1.0));
 }
@@ -243,6 +250,7 @@ void main() {
     float dLens = 0.0;
     if ((-sdKy) < lensRh) {
         dLens = circleMapRealistic(1.0 - (-sdIn / lensRh)) * (-u_lensRefractionPx);
+        dLens *= (1.0 + clamp(u_pressProgress, 0.0, 1.0) * 0.45);
     }
 
     vec2 lensDeltaUv = (dLens * lensDir) / u_resolution;
@@ -266,7 +274,8 @@ void main() {
     bulgeUv *= pxNorm;
 
     vec2 baseOffset = lensDeltaUv + snellOff + bulgeUv;
-    vec2 uvCenter = backdropUv(v_screenTexCoord, baseOffset);
+    float pinchMix = 1.0 - smoothstep(0.0, 0.72, tDeep);
+    vec2 uvCenter = backdropUv(v_screenTexCoord, baseOffset, pinchMix);
     float avgDim = (u_glassSize.x + u_glassSize.y) * 0.5;
 
     float caAmt = max(u_chromaticAberration, 0.0);
@@ -285,9 +294,9 @@ void main() {
 
         vec2 dispDir = length(pPx) > 1e-3 ? normalize(pPx) : vec2(0.0, 1.0);
         vec2 chromaPush = dispDir * chromaBase * pxNorm;
-        vec2 uvR = backdropUv(v_screenTexCoord, baseOffset + chromaPush * u_dispersionR);
+        vec2 uvR = backdropUv(v_screenTexCoord, baseOffset + chromaPush * u_dispersionR, pinchMix);
         vec2 uvG = uvCenter;
-        vec2 uvB = backdropUv(v_screenTexCoord, baseOffset - chromaPush * u_dispersionB);
+        vec2 uvB = backdropUv(v_screenTexCoord, baseOffset - chromaPush * u_dispersionB, pinchMix);
 
         if (u_useBlurredTexture == 1) {
             float r = texture2D(u_blurredTexture, uvR).r;
@@ -412,6 +421,14 @@ void main() {
         float causticDot = dot(normalize(vec3(gradH * u_normalStrength, 0.45)), Lp);
         float caust = pow(max(causticDot, 0.0), 7.0) * u_causticIntensity * height;
         color += caust * vec3(1.0, 0.96, 0.90);
+    }
+
+    float pressGlow = clamp(u_pressProgress, 0.0, 1.0) * clamp(u_glowStrength, 0.0, 1.0);
+    if (pressGlow > 0.001) {
+        vec2 glowPx = u_glowCenter * u_glassSize - halfSz;
+        float glowR = minDim * 1.5;
+        float spot = smoothstep(glowR, glowR * 0.5, length(pPx - glowPx));
+        color += vec3(1.0) * pressGlow * (0.08 + spot * 0.15);
     }
 
     gl_FragColor = vec4(color, opacity * u_transmittance);

@@ -108,6 +108,10 @@ internal class PrismalGlassRenderer(private val context: Context) : GLSurfaceVie
     private var uTransmittance = -1
     private var uBackdropSampleScale = -1
     private var uParallaxScale = -1
+    private var uPressProgress = -1
+    private var uBackdropPinch = -1
+    private var uGlowCenter = -1
+    private var uGlowStrength = -1
 
     // Geometry buffers
     private lateinit var quadBuffer: FloatBuffer
@@ -165,6 +169,11 @@ internal class PrismalGlassRenderer(private val context: Context) : GLSurfaceVie
     private var backdropSampleScaleX = 1f
     private var backdropSampleScaleY = 1f
     private var parallaxScale = 1f
+    private var pressProgress = 0f
+    private var backdropPinch = 1f
+    private var glowCenterX = 0.5f
+    private var glowCenterY = 0.5f
+    private var glowStrength = 1f
 
     // Renderer
     override fun onSurfaceCreated(glUnused: GL10?, config: EGLConfig?) {
@@ -251,6 +260,10 @@ internal class PrismalGlassRenderer(private val context: Context) : GLSurfaceVie
         uTransmittance = GLES20.glGetUniformLocation(glassProgram, "u_transmittance")
         uBackdropSampleScale = GLES20.glGetUniformLocation(glassProgram, "u_backdropSampleScale")
         uParallaxScale = GLES20.glGetUniformLocation(glassProgram, "u_parallaxScale")
+        uPressProgress = GLES20.glGetUniformLocation(glassProgram, "u_pressProgress")
+        uBackdropPinch = GLES20.glGetUniformLocation(glassProgram, "u_backdropPinch")
+        uGlowCenter = GLES20.glGetUniformLocation(glassProgram, "u_glowCenter")
+        uGlowStrength = GLES20.glGetUniformLocation(glassProgram, "u_glowStrength")
 
         GLES20.glClearColor(0f, 0f, 0f, 0f)
         GLES20.glEnable(GLES20.GL_BLEND)
@@ -383,6 +396,18 @@ internal class PrismalGlassRenderer(private val context: Context) : GLSurfaceVie
         }
         if (uParallaxScale >= 0) {
             GLES20.glUniform1f(uParallaxScale, parallaxScale)
+        }
+        if (uPressProgress >= 0) {
+            GLES20.glUniform1f(uPressProgress, pressProgress)
+        }
+        if (uBackdropPinch >= 0) {
+            GLES20.glUniform1f(uBackdropPinch, backdropPinch)
+        }
+        if (uGlowCenter >= 0) {
+            GLES20.glUniform2f(uGlowCenter, glowCenterX, glowCenterY)
+        }
+        if (uGlowStrength >= 0) {
+            GLES20.glUniform1f(uGlowStrength, glowStrength)
         }
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
@@ -692,7 +717,7 @@ internal class PrismalGlassRenderer(private val context: Context) : GLSurfaceVie
         lensRefractionUserScale = max(0.25f, v)
     }
 
-    /** Scales backdrop UVs from center — lower values magnify (flat lens). Used by switch thumb. */
+    /** Scales backdrop UVs from center - lower values magnify (flat lens). Used by switch thumb. */
     fun setBackdropSampleScale(sx: Float, sy: Float) {
         backdropSampleScaleX = max(0.01f, sx)
         backdropSampleScaleY = max(0.01f, sy)
@@ -702,6 +727,30 @@ internal class PrismalGlassRenderer(private val context: Context) : GLSurfaceVie
     fun setParallaxScale(v: Float) {
         parallaxScale = v.coerceIn(0f, 2f)
     }
+
+    /**
+     * Press interaction state for iOS-style liquid glass.
+     * @param progress 0 = rest, 1 = fully pressed
+     * @param pinch Center backdrop scale at full press
+     * @param glowX Touch highlight X in normalized glass coords [0, 1]
+     * @param glowY Touch highlight Y in normalized glass coords [0, 1]
+     */
+    fun setPressInteraction(
+        progress: Float,
+        pinch: Float,
+        glowX: Float,
+        glowY: Float,
+        glowStrength: Float = 1f,
+    ) {
+        pressProgress = progress.coerceIn(0f, 1f)
+        backdropPinch = pinch.coerceIn(0.5f, 1f)
+        glowCenterX = glowX.coerceIn(0f, 1f)
+        glowCenterY = glowY.coerceIn(0f, 1f)
+        this.glowStrength = glowStrength.coerceIn(0f, 1f)
+    }
+
+    /** Clears press interaction (rest state). */
+    fun clearPressInteraction() = setPressInteraction(0f, 1f, 0.5f, 0.5f, 0f)
 
     /** 0 = flat sigmoid slab, 1 = strong spherical-cap “droplet” volume, up to 2 = exaggerated dome */
     fun setLiquidDomeStrength(v: Float) {
