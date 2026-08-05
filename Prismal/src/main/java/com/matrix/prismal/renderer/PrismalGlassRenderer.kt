@@ -379,7 +379,7 @@ internal class PrismalGlassRenderer(private val context: Context) : GLSurfaceVie
             kotlin.math.min(1f, max(0f, normalStrength * 0.9f))
         )
         GLES20.glUniform1f(uVibrancy, 1.28f)
-        GLES20.glUniform1f(uPlainHighlight, 0.16f)
+        GLES20.glUniform1f(uPlainHighlight, 0.08f)
         GLES20.glUniform1f(uLiquidDome, liquidDome)
         GLES20.glUniform1f(uFresnelReflect, fresnelReflect)
 

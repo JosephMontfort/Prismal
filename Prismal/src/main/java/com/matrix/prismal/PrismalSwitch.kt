@@ -62,13 +62,13 @@ class PrismalSwitch @JvmOverloads constructor(
     private var onColor = "#34C759".toColorInt()
     private var offColor = Color.argb(140, 0x78, 0x78, 0x78)
 
-    private var restBlur = 8f
-    private var pressChromatic = 2.5f
+    private var restBlur = 0f
+    private var pressChromatic = 3f
     private var thumbIOR = 1.45f
     private var thumbBrightness = 1.12f
-    private var thumbNormalStrength = 1.2f
+    private var thumbNormalStrength = 0.2f
     private var thumbDisplacementScale = 1f
-    private var thumbRestLensScale = 0.32f
+    private var thumbRestLensScale = 0.38f
     private var thumbPressLensScale = 0.72f
     private var thumbShadowColor = Color.argb(0, 0, 0, 0)
     private var thumbShadowSoftness = 0.25f
@@ -79,6 +79,7 @@ class PrismalSwitch @JvmOverloads constructor(
     private var thumbCornerRadiusPx = -1f
     private var thumbRefractionInset = -1f
     private var thumbEdgeFalloff = -1f
+    private var thumbParallaxScale = 0.4f
     private var thumbShowNormals = false
     private var thumbGlassColor = Color.argb(28, 255, 255, 255)
     private val trackView = object : View(context) {
@@ -129,8 +130,13 @@ class PrismalSwitch @JvmOverloads constructor(
 
         thumb.setBlurRadius(lerp(restBlur, 0f, pressT))
         thumb.setChromaticAberration(lerp(0f, pressChromatic, pressT))
-        thumb.setLensRefractionScale(lerp(thumbRestLensScale, thumbPressLensScale, pressT))
+        thumb.setLensRefractionScale(lerp(thumbRestLensScale / 3, thumbPressLensScale / 3, pressT))
         thumb.setHeightBlurFactor(lerp(restHbfPx, pressHbfPx, pressT))
+        thumb.setLiquidDomeStrength(0.2f)
+        thumb.setIOR(1.4f)
+        thumb.setBrightness(1f)
+        thumb.setThickness(0.2f)
+        thumb.setDisplacementScale(0.6f)
         overlay.alpha = lerp(1f, 0f, pressT)
         thumb.setPressInteraction(
             progress = pressT,
@@ -339,13 +345,13 @@ class PrismalSwitch @JvmOverloads constructor(
         thumb.setLensRefractionScale(thumbRestLensScale)
         thumb.setDisplacementScale(thumbDisplacementScale)
         thumb.setNormalStrength(thumbNormalStrength)
-        thumb.setLiquidDomeStrength(1.0f)
-        thumb.setFresnelReflectStrength(1.5f)
-        thumb.setRimStrength(0.4f)
-        thumb.setSpecular(0.9f, 80f)
-        thumb.setCausticIntensity(0.04f)
+        thumb.setLiquidDomeStrength(1.15f)
+        thumb.setFresnelReflectStrength(2.0f)
+        thumb.setRimStrength(0.75f)
+        thumb.setSpecular(1.2f, 120f)
+        thumb.setCausticIntensity(0.12f)
         thumb.setMinSmoothing(thumbMinSmoothing)
-        thumb.setHighlightWidth(if (thumbHighlightWidth > 0f) thumbHighlightWidth else 0.35f)
+        thumb.setHighlightWidth(if (thumbHighlightWidth > 0f) thumbHighlightWidth else 0.45f)
         thumb.setLightDirection(-0.35f, -0.75f)
         thumb.setHeightBlurFactor(dp(refractionHeightDp * 0.28f))
         thumb.setRefractionInset(insetPx)
@@ -355,6 +361,7 @@ class PrismalSwitch @JvmOverloads constructor(
         thumb.setTransmittance(1f)
         thumb.setShadowProperties(thumbShadowColor, thumbShadowSoftness)
         thumb.setShowNormals(thumbShowNormals)
+        thumb.setParallaxScale(thumbParallaxScale)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldW: Int, oldH: Int) {

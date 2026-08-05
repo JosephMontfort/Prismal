@@ -59,12 +59,12 @@ class PrismalSlider @JvmOverloads constructor(
     private var maxValue = 100f
     private var currentValue = 0f
     private var onValueChanged: ((Float) -> Unit)? = null
-    private var restBlur = 8f
+    private var restBlur = 0f
     private var pressChromatic = 3f
     private var accentColor = "#0088FF".toColorInt()
     private var thumbIOR = 1.45f
     private var thumbBrightness = 1.12f
-    private var thumbNormalStrength = 2.0f
+    private var thumbNormalStrength = 0.2f
     private var thumbDisplacementScale = 1f
     private var thumbRestLensScale = 0.38f
     private var thumbPressLensScale = 0.72f
@@ -165,14 +165,15 @@ class PrismalSlider @JvmOverloads constructor(
 
         thumb.setBlurRadius(lerp(restBlur, 0f, pressT))
         thumb.setChromaticAberration(lerp(0f, pressChromatic, pressT))
-        thumb.setLensRefractionScale(lerp(thumbRestLensScale, thumbPressLensScale, pressT))
+        thumb.setLensRefractionScale(lerp(thumbRestLensScale / 3, thumbPressLensScale / 3, pressT))
         thumb.setHeightBlurFactor(lerp(restHbfPx, pressHbfPx, pressT))
+        thumb.setLiquidDomeStrength(0.2f)
+        thumb.setIOR(1.4f)
+        thumb.setBrightness(1f)
+        thumb.setThickness(0.2f)
+        thumb.setDisplacementScale(0.6f)
 
-        overlay.alpha = if (isThumbInGlassState() && !thumbBackdropReady) {
-            1f
-        } else {
-            lerp(1f, 0f, pressT)
-        }
+        overlay.alpha = if (isThumbInGlassState() && !thumbBackdropReady) 1f else lerp(1f, 0f, pressT)
         thumb.setPressInteraction(
             progress = pressT,
             highlightX = thumbW / 2f,
