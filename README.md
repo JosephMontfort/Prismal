@@ -11,6 +11,21 @@
 
 ---
 
+## Compose Successor - PrismalAGSL
+
+If you are working on a Jetpack Compose project, we recommend using the modern successor, [**PrismalAGSL**](https://github.com/styropyr0/PrismalAGSL).
+
+PrismalAGSL is built around modern Android graphics technologies, using **Android Graphics Shading Language (AGSL)** and **RuntimeShader** to provide a more efficient and robust rendering pipeline.
+
+Compared to the previous approach, PrismalAGSL is significantly lighter on GPU and memory resources because background capture is handled directly within the graphics pipeline rather than through a separate capture mechanism.
+
+For new Compose projects, **PrismalAGSL is the recommended implementation**.
+
+- **PrismalAGSL:** https://github.com/styropyr0/PrismalAGSL
+- **JitPack:** `implementation("com.github.styropyr0:PrismalAGSL:Prismal:1.0.0")`
+
+Both libraries share the same visual language (blur, refraction, glass controls). APIs differ — PrismalAGSL is not a drop-in replacement, but the recommended path for new Compose apps.
+
 ## Screenshots
 
 ### Glass rendering
