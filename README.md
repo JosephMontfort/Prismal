@@ -11,7 +11,7 @@
 
 ---
 
-## Compose Successor - PrismalAGSL
+## High Performance Compose Successor - PrismalAGSL
 
 If you are working on a Jetpack Compose project, we recommend using the modern successor, [**PrismalAGSL**](https://github.com/styropyr0/PrismalAGSL).
 
